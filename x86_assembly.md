@@ -1,4 +1,3 @@
-
 # x86 assembly
 
 ## Introduction
@@ -8,9 +7,15 @@ Une opérande peut être de 3 types :
 - *registre* : numéro de registre
 - *mémoire* : adresse mémoire qui suit la syntaxe ```%segment:displacement(base, index, scale)```
 	
+Une instruction x86 peut prendre 0 à 4 opérandes.
+
+Un mnémonique (ex : jmp) est utilisé pour représenter de manière simple un ou des opcodes (FF, E9 etc.)
+	
 Adresse en mémoire : ```(base + scale * index) + displacement```
 	
 Chaque registre est identifié par un numéro unique. Exemple : EAX = numéro 0, EBX = numéro 3, ECX = numéro 1 etc.
+
+Une même instruction peut être représentée par plusieurs opcode. En effet, chaque opcode désigne une version différente de l'instruction (ex : version qui prend une opérande au lieu de deux)
 
 
 ## Anatomie d'une instruction assembleur convertie en binaire
@@ -25,7 +30,7 @@ Il y a 4 groupes de préfixes :
 	- *groupe 3* : spécifier une taille 16 bits ou 32 bits pour les opérandes 
 	- *groupe 4* : spécifier une taille 16 bits ou 32 bits pour les adresses 
 - *Opcode* : identifiant unique d'une instruction assembleur. La longueur de ce champ peut être de 1, 2 ou 3 octets, et 3 bits supplémentaires peuvent être utilisés dans le champ ModR/M pour représenter l'opcode 
-- *ModR/M* : ce champ, sur 1 octet, contient 3 sous-champs : 
+- *ModR/M* : ce champ, sur 1 octet, peut représenter deux opérandes, contient 3 sous-champs : 
 	- *mod* : sur 2 bits, sa valeur indique ce que contient *r/m*. On a : 
 		- soit un registre (valeur = 11)
 		- soit un mode d'adressage (valeur = 00, 01 ou 10)
@@ -97,5 +102,69 @@ On a en binaire : ```67 ff 24 85 34 12 00 00```
 	- ```34 12 00 00``` : champ Displacement, c'est 0x1234 en little-endian (sur 32 bits car le préfixe 0x67 indique l'utilisation d'adresses sur 32 bits)
 	
 	
+## Comprendre une instruction assembleur en détail	
+
+Le volume 2 du manuel Intel met à disposition des explications détaillées sur chacune des instructions x86. Parmi ces explications se trouvent des tableaux dont une légende est donnée dans le section 3.1 du volume 2.
+
+Voici les 2 tableaux associées à l'instruction ```jmp``` : 
+![image](./Images/x86_jmp_instruction.png)
+
+Voyons ce que signifie chaque colonne du premier tableau (Instruction Summary Table) : 
+- *Opcode* : indique la valeur de l'opcode en hexadécimal (ex : EB, E9, FF etc.) et des informations supplémentaires
+	- *cb* (1 octet), *cw* (2 octets), *cd* (4 octets), *cp* (6 octets) etc. : une valeur d'une certaine taille suit directement l'opcode
+	- */[0-7]* : indique que l'instruction ne possède qu'une seule opérande, celle-ci étant précisée par le sous-champ *r/m* de *ModR/M*. Cela signifie donc que le sous-champ *reg/opcode* contient des bits supplémentaires pour l'opcode : la valeur indiquée après le slash vaut la valeur en décimal de *reg/opcode*
+	- */r* : indique que l'instruction possède deux opérandes
+- *Instruction* : indique la syntaxe de l'instruction
+	- *rel8* : offset (valeur signée) relativement à l'adresse de fin de l'instruction (notons la ADDR = octet directement après la fin de l'instruction), se trouve dans l'intervalle [ADDR - 128, ADDR + 127] 
+	- *rel16*, *rel32* : offset (valeur signée) dans le même code segment que l'instruction (*rel16* s'applique aux instructions avec une taille d'opérandes à 16 bits et *rel32* pour une taille de 32 bits) 
+	- *imm8*, *imm16*, *imm32*, *imm64* : cette opérande est de type immédiate (le numéro dépend de la taille des opérandes de l'instruction)
+	- *ptr16:16*, *ptr16:32* : cette opérande est un pointeur qui pointe habituellement sur un code segment différent de l'instruction. La valeur de ce pointeur est divisée est deux parties. 
+	- *r/m8*, *r/m16*, *r/m32*, *r/m64* : cette opérande est soit un registre général ou soit une opérande de type mémoire (le numéro dépend de la taille des opérandes de l'instruction)
+	- *r8*, *r16*, *r32*, *r64* : cette opérande est un registre général
+- *Op/En* : signifie Operand/Encoding, contient une lettre qui doit être utilisée comme index dans le tableau suivant qui s'appelle Instruction Operand Encoding Table
+- *64-Bit/32-Bit Mode* : indique si cet opcode est supporté en mode 64 bits
+- *Compat/Leg Mode* : indique si cet opcode est supporté dans le Compatibility/Legacy Mode
+- *Description* : donne des informations sur l'instruction
+
+Des paragraphes supplémentaires peuvent être présents : 
+- *Operation* : pseudo-code de l'instruction
+- *Flags affected* : liste des flags du registre EFLAGS qui sont affectés par l'instruction
+- *Exceptions* : liste des exceptions qui peuvent survenir dans un mode d'exécution donné (ex : mode protégé)
+
+Le deuxième tableau (Instruction Operand Encoding Table) donne des informations détaillées sur chacune des opérandes de l'instruction (ex : l'opérande peut être lue (r), écrite (w) ou les deux). 
+Exemple : si la première opérande vaut *ModR/M:r/m (r)*, cela siginifie qu'elle est renseignée dans le sous-champ *r/m* du champ *ModR/M* et que celle-ci n'est accessible qu'en lecture
+
+
+### Exemple 
+
+Soit le programme suivant : 
+```
+main:
+	jmp main
+	jmp main2
+	jmp main
+main2:
+	jmp 0x1234
+```
+
+On obtient le code binaire suivant : 
+```eb fe eb 02 eb fa e9 2b 12```
+
+Premier ```jmp``` : 
+	- ```eb``` : ```jmp``` qui est suivie d'une valeur sur 1 octet qui est un *rel8*
+	- ```fe``` = 11111110b = 254 (non-signé) = -2 (complément à 2) => rel8 (= offset)
 	
+Deuxième ```jmp``` : 
+	- ```eb``` : ```jmp``` qui est suivie d'une valeur sur 1 octet qui est un *rel8*
+	- ```02``` = +2 => rel8 (= offset)
+
+Troisième ```jmp``` : 
+	- ```eb``` : ```jmp``` qui est suivie d'une valeur sur 1 octet qui est un *rel8*
+	- ```fa``` = 11111010b = 250 (non-signé) = -6 (complément à 2) => rel8 (= offset)
+
+Quatrième ```jmp``` : 
+	- ```e9``` : ```jmp``` qui est suivie d'une valeur sur 2 ou 3 octets (ici, les opérandes de l'instruction sont sur 16 bits = 2 octets => *rel16*)
+	- ```2b12``` : rel16 (= offset depuis la fin de ce ```jmp```). Ici, si ADDR = 0x9, on a : 0x9 + 0x122b (big endian) = 0x1234 
+
+
 
