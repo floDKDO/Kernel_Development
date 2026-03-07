@@ -9,9 +9,20 @@ Une opérande peut être de 3 types :
 	
 Une instruction x86 peut prendre 0 à 4 opérandes.
 
+Types numériques : 
+- *byte* : 1 octet
+- *word* : 2 octets
+- *double word* : 4 octets
+- *quadruple word* : 8 octets
+- *double quadruple word* : 16 octets
+
+2 types de pointeurs : 
+- *near pointer* : contient une adresse dans un segment (implicite)
+- *far pointer* : contient une adresse dans un segment (explicite via un segment selector)
+
 Un mnémonique (ex : jmp) est utilisé pour représenter de manière simple un ou des opcodes (FF, E9 etc.)
 	
-Adresse en mémoire : ```(base + scale * index) + displacement```
+Adresse en mémoire : ```base + (scale * index) + displacement```
 	
 Chaque registre est identifié par un numéro unique. 
 Exemple : EAX = numéro 0, EBX = numéro 3, ECX = numéro 1 etc.
