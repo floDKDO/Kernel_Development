@@ -1,6 +1,14 @@
 # x86 assembly
 
-## Introduction
+## Eléments de base
+
+Il existe deux syntaxes pour l'assembleur x86 : 
+- syntaxe Intel
+- syntaxe AT&T
+(voir [ici](https://imada.sdu.dk/u/kslarsen/dm546/Material/IntelnATT.htm) pour plus d'informations)
+
+La notation [...] en syntaxe Intel désigne le contenu stocké à l'adresse indiquée entre les crochets (<=> déréférence).
+Exemple : ```mov eax, [ebp - 4]``` => mettre dans ```eax``` le contenu en mémoire stocké à l'adresse "contenu de ```ebp``` - 4"
 
 Une opérande peut être de 3 types : 
 - *immédiate* : valeur constante
@@ -9,25 +17,34 @@ Une opérande peut être de 3 types :
 	
 Une instruction x86 peut prendre 0 à 4 opérandes.
 
+Un mnémonique (ex : ```jmp```) est utilisé pour représenter de manière simple un ou des opcodes (FF, E9 etc.)
+
 Types numériques : 
-- *byte* : 1 octet
-- *word* : 2 octets
-- *double word* : 4 octets
-- *quadruple word* : 8 octets
+- *byte* : 1 octet (suffixe = *b*. Exemple : ```mov**b**```)
+- *word* : 2 octets (suffixe = *w*. Exemple : ```mov**w**```)
+- *double word* : 4 octets (suffixe = *l*. Exemple : ```mov**l**```)
+- *quadruple word* : 8 octets (suffixe = *q*. Exemple : ```mov**q**```)
 - *double quadruple word* : 16 octets
+
+Dans le cas d'assembleurs qui utilisent la syntaxe AT&T (ex : GNU AS), un suffixe est ajouté au mnémonique d'une instruction : 
+- *byte* : suffixe = *b*. Exemple : ```mov**b**```
+- *word* : suffixe = *w*. Exemple : ```mov**w**```
+- *double word* : suffixe = *l*. Exemple : ```mov**l**```
+- *quadruple word* : suffixe = *q*. Exemple : ```mov**q**```
+Attention : ne pas confondre avec ```movd``` (d n'est ici pas un suffixe mais une autre instruction que ```mov```) !
 
 2 types de pointeurs : 
 - *near pointer* : contient une adresse dans un segment (implicite)
 - *far pointer* : contient une adresse dans un segment (explicite via un segment selector)
-
-Un mnémonique (ex : jmp) est utilisé pour représenter de manière simple un ou des opcodes (FF, E9 etc.)
 	
-Adresse en mémoire : ```base + (scale * index) + displacement```
+Effective address (= résultat de ce calcul) : ```base + (scale * index) + displacement```
 	
 Chaque registre est identifié par un numéro unique. 
 Exemple : EAX = numéro 0, EBX = numéro 3, ECX = numéro 1 etc.
 
 Une même instruction peut être représentée par plusieurs opcode. En effet, chaque opcode désigne une version différente de l'instruction (ex : version qui prend une opérande au lieu de deux)
+
+Certaines intructions modifient le registre EFLAGS
 
 TODO : Compatibility/Legacy Mode
 
@@ -193,4 +210,71 @@ Troisième ```jmp``` :
 Quatrième ```jmp``` : 
 	- ```e9``` : ```jmp``` qui est suivie d'une valeur sur 2 ou 3 octets (ici, les opérandes de l'instruction sont sur 16 bits = 2 octets => *rel16*)
 	- ```2b12``` : *rel16* (= offset depuis la fin de ce ```jmp```). Ici, si EIP = 0x9, on a : 0x9 + 0x122b (big endian) = 0x1234 
+
+
+## Quelques instructions
+
+### mov
+On ne peut pas réaliser un ```mov``` avec deux opérandes de type mémoire ! Si on souhaite faire cela, on aura besoin de réaliser deux ```mov``` : un de la mémoire vers un registre et un autre du registre vers la mémoire
+Il existe la variante ```movzx``` qui copie l'opérande source vers l'opérande de destination (taille opérande source inférieure à taille opérande destination) en remplissant de 0 les bits supplémentaires de l'opérande de destination
+
+### lea
+Utilisée par exemple pour réaliser des opérations arithmétiques sur le contenu d'un registre.
+Exemple : post-incrémentation 
+```
+Disassembly of section .text:
+
+int i1 = i++;
+    122f:	mov    eax,DWORD PTR [rbp-0x64] #eax=i
+    1232:	lea    edx,[rax+0x1] #edx=i+1
+    1235:	mov    DWORD PTR [rbp-0x64],edx #i=edx=i+1
+    1238:	mov    DWORD PTR [rbp-0x10],eax #i1=i
+```
+
+Si on avait voulu faire un ```mov``` dans edx à la place, on aurait dû ajouter un ```add``` en plus.
+
+Attention, la syntaxe de ```lea``` porte à confusion : ```lea    edx,[rax+0x1]``` ne veut pas dire "mettre dans edx le contenu stocké à l'adresse rax+0x1" mais plutôt "mettre dans edx la valeur contenue dans rax+0x1" !
+
+Plus d'informations 
+[ici](https://stackoverflow.com/questions/1699748/what-is-the-difference-between-mov-and-lea) et 
+[ici](https://stackoverflow.com/questions/35475396/what-is-the-difference-between-mov-and-lea-in-terms-of-retrieving-an-address).
+
+### cdq et idiv
+```cdq``` copie le signe de la valeur contenue dans EAX (bit de poids le plus fort = bit 31) dans tous les bits de EDX. 
+
+A ne pas confondre avec ```cdqe``` ! 
+Il faut utiliser ```cdq``` avant ```idiv``` car l'on souhaite effectuer une division signée (voir [ici](https://stackoverflow.com/questions/36464879/when-and-why-do-we-sign-extend-and-use-cdq-with-mul-div) pour plus d'informations)
+
+Lexique de la division euclidienne : 
+- dividende : nombre que l'on divise
+- diviseur : nombre qui divise le dividende
+- quotient : un des 2 résultats (nombre de fois qu'il y a le diviseur dans le dividende)
+- reste : un des 2 résultats 
+Exemple : 30 (dividende) = 7 (diviseur) * 4 (quotient) + 2 (reste)
+
+```idiv``` a la particularité de ne prendre qu'une seule opérande => le diviseur. Le dividende est la paire EDX:EAX, avec EAX une valeur et EDX le signe de la valeur contenue dans EAX (EDX rempli avec ```cdq```).
+```idiv``` donne deux résultats : le quotient et le reste de la division. Le quotient est placé dans EAX et le reste dans EDX
+
+### shl/sal
+Décalage de l'opérande source de x bits vers la gauche, les "nouveaux" bits étant des 0.
+```shl``` et ```sal``` sont des synonymes : ces deux mnémoniques sont strictement équivalents (complétude car dans le cas d'un décalage à droite, il y a une distinction entre ```shr``` et ```sar```) (voir [ici](https://stackoverflow.com/questions/8373415/difference-between-shl-and-sal-in-80x86) et la section 7.3.6.1 du volume 1 pour plus d'informations)
+
+### shr/sar
+Attention : ```shr``` et ```sar``` ne sont pas des synonymes ! 
+
+Décalage de l'opérande source de x bits vers la droite, les "nouveaux" bits étant des 0 pour ```shr```, et soit des 0 ou des 1 pour ```sar``` selon la valeur initiale du signe 
+=> si le signe était positif (bit de poids le plus fort de l'opérande = 0), alors les "nouveaux" bits seront des 0
+=> si le signe était négatif (bit de poids le plus fort de l'opérande = 1), alors les "nouveaux" bits seront des 1
+
+Voir la section 7.3.6.1 du volume 1 pour plus d'informations
+
+### cmp et EFLAGS
+```cmp``` compare deux opérandes et marque le résultat dans un status flag de EFLAGS.
+Exemple : si on fait un ```cmp``` entre deux opérandes égales, le flag ```ZF``` de EFLAGS sera mis à 1
+Voir Appendix B du volume 1 pour plus d'informations
+
+### SETcc
+Mettre à 0 ou 1 un registre ou opérande mémoire selon le status flag de EFLAGS souhaité (cc est à remplacer par le suffixe souhaité).
+Exemple : ```sete al``` met le sous-registre al à 1 si le status flag ZF de EFLAGS est à 1 ou à 0 sinon
+
 
