@@ -1,20 +1,24 @@
 # ELF
 
+L'Executable and Linking Format (ELF) est le format des fichiers objets sur les systèmes Unix.
+
 ## Commandes
-- man elf : explique le contenu d'un fichier ELF
-- readelf : obtenir des informations sur un fichier ELF 
+- ```man elf``` : explique le contenu d'un fichier ELF
+- ```readelf``` : obtenir des informations sur un fichier ELF 
+- ```nm``` : afficher la table des symboles du fichier ELF
 
 ## gcc
 - voir les options activées par défaut : ```gcc -v``` dans la partie "Configured with". Par défaut, mon gcc a notamment ```--enable-default-pie``` => e_type = ET_DYN (Position-Independent Executable file). Si l'on souhaite obtenir un exécutable classique, il faut désactiver PIE avec l'option ```-no-pie```. Finalement, on obtient e_type = ET_EXEC (exécutable)
 - ajouter des attributs dans notre code (ex avec weak) : ```__attribute__((weak))```
+- pour obtenir un fichier compilé mais pas link (file.o), on utilise la commande : ```gcc -c file.c```
 
 
 ## Contenu
 Un fichier ELF est composé des éléments suivants : 
 - ELF header
 - Program header table (optionnelle)
+- des sections
 - Section header table (optionnelle)
-- des sections 
 
 ### ELF Header
 On peut l'afficher avec la commande : ```readelf -h prog```
@@ -27,8 +31,9 @@ Il est composé des champs suivants :
 	- *EI_OSABI* : indique l'ABI utilisée par notre OS (ex : UNIX System V ABI)
 	- *EI_ABIVERSION* : doit valoir 0
 	- *EI_PAD* : padding de zéros
-- Type (*e_type*) : indique le type du fichier (relocatable file, exécutable, librairie partagée .so, fichier core). 
-- Machine (*e_machine*) : architecture de la machine (ex : AMD x86-64)
+- Type (*e_type*) : indique le type du fichier (relocatable file .o, exécutable, librairie partagée .so, fichier core).
+Il existe également les commandes : ```nm -a prog``` et ```nm -D prog``` pour respectivement afficher .symtab et .dynsym. 
+- Machine (*e_machine*) : architecture du processeur => ISA (ex : AMD x86-64)
 - Version (*e_version*) : doit valoir 1
 - Entry point address (*e_entry*) : adresse virtuelle du code qui doit être exécuté en premier (main() en C) ou 0
 - Start of program headers (*e_phoff*) : indique l'offset depuis le début du fichier ELF pour atteindre la program header table, ou 0
@@ -42,44 +47,85 @@ Il est composé des champs suivants :
 - Section header string table index (*e_shstrndx*) : contient l'indice dans la section header table de l'entrée qui pointe sur la section contenant les noms des sections (.shstrtab)
 
 ### Program header table
-Elle est optionnelle.
+Elle est optionnelle. On peut l'afficher avec la commande : ```readelf -l -W prog```.
+Chaque entrée de la program header table décrit un segment via un program header.
+Les segments sont utilisés par l'OS pour charger un programme en mémoire (type = *PT_LOAD*).
+Un segment contient une ou plusieurs sections. La commande ci-dessus affiche également les sections contenues par chaque segment.
+
+Une section appartient à un segment si son intervalle [*sh_addr*, *sh_addr* + *sh_size*] appartient à l'intervalle [*p_vaddr*, *p_vaddr* + *p_memsz*] du segment en question.  
+Exemple : 
+- Soit le program header suivant : 	
+	```Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align```
+    ```LOAD           0x001000 0x0000000000001000 0x0000000000001000 0x000189 0x000189 R E 0x1000```
+	- Le segment associé à ce program header contient les sections suivantes : .init .plt .plt.got .text .fini
+	- Soient les section headers de .init et .fini (respectivement la première et dernière section du segment ci-dessus) :
+	```[Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al``` 
+	```[11] .init             PROGBITS        0000000000001000 001000 00001b 00  AX  0   0  4```
+	```[15] .fini             PROGBITS        000000000000117c 00117c 00000d 00  AX  0   0  4```
+- On a : 
+	- adresse début du segment = 0x1000 (*p_vaddr*), adresse de fin du segment = 0x1000 + 0x0189 = 0x1189 (*p_vaddr* + *p_memsz*)
+	- la section .init a son permier octet à l'adresse 0x1000 (*sh_addr*), ce qui correspond bien à l'adresse de début du segment
+	- la section .fini a son premier octet à l'adresse 0x117c (*sh_addr*) et son dernier octet à l'adresse 0x117c + 0x000d = 0x1189 (*sh_addr* + *sh_size*), ce qui correspond bien à l'adresse de fin du segment
+
+Il n'y a pas de segments dans un fichier objet (.o).
+
 Elle est composée des champs suivants : 
-- 
+- Type (*p_type*) : type du segment. Voici les principaux types : 
+	- *PT_NULL* : indique que l'entrée est inutilisée
+	- *PT_LOAD* : segment qui peut être chargé en mémoire
+	- *PT_DYNAMIC* : segment qui contient des informations pour du dynamic linking
+	- *PT_NOTE* : segment qui contient des informations spécifiques définies par le vendeur ou le système
+	- *PT_PHDR* : l'entrée donne la position et la taille de la program header table
+	- *PT_GNU_STACK* : extension GNU utilisée par le noyau Linux pour assigner des flags à la pile du programme
+- Offset (*p_offset*) : indique l'offset depuis le début du fichier ELF pour atteindre le premier octet du segment
+- VirtAddr (*p_vaddr*) : indique l'adresse virtuelle à laquelle le premier octet du segment doit être placé en mémoire
+- PhysAddr (*p_paddr*) : ignoré pour les systèmes qui respectent l'ABI System V
+- FileSiz (*p_filesz*) : taille du segment dans le fichier ELF, ou 0
+- MemSiz (*p_memsz*) : taille du segment en mémoire, ou 0
+- Flg (*p_flags*) : flags associés au segment. Il y a : 
+	- E (*PF_X*) : on peut exécuter le segment
+	- W (*PF_W*) : on peut écrire dans le segment
+	- R (*PF_R*) : on peut lire le segment
+- Align (*p_align*) : contient soit une puissance de deux pour indiquer une contrainte d'alignement pour *p_vaddr* (=> *p_vaddr* / *p_align* a le même reste que *p_offset* / *p_align*, idem pour la taille des pages), ou 0 ou 1
 
 
 ### Section header table
 Elle est optionnelle. On peut l'afficher avec la commande : ```readelf -S -W prog```.
 Chaque entrée de la section header table décrit une section via un section header. 
 Les sections sont utilisées par le linker.
-On peut afficher le contenu d'une section avec la commande : ```readelf -x [nom_section] prog```. Pour les sections qui contiennent des strings (ex : .shstrtab), il faut utiliser la commande : ```readelf -r .shstrtab prog```
+On peut afficher le contenu d'une section avec la commande : ```readelf -x [nom_section] prog```. Pour les sections qui contiennent des strings (ex : .shstrtab), il faut utiliser la commande : ```readelf -p .shstrtab prog```
 Elle est composée des champs suivants : 
 - Nr : indice de l'entrée
 - Name (*sh_name*) : nom de la section. En réalité, c'est un indice dans la section header string table (.shstrtab)
 - Type (*sh_type*) : type de la section. Voici les principaux types : 
-	- *SHT_NULL* = le section header est considéré comme inactif et n'est donc associé à aucune section
-	- *SHT_PROGBITS* = section qui contient des informations sur le programme comme .text
-	- *SHT_NOTE* = section qui contient des informations spécifiques définies par le vendeur ou le système
-	- *SHT_STRTAB* = section qui contient une string table
-	- *SHT_RELA* = relocation section
-	- *SHT_DYNAMIC* = section qui contient des informations pour du dynamic linking
-	- *SHT_SYMTAB* = section qui contient une table des symboles (utilisée lors de l'édition des liens)
-	- *SHT_DYNSYM* = section qui contient une table des symboles (utilisée lors d'un dynamic linking)
-	- *SHT_NOBITS* = section qui n'occupe aucune place dans le fichier ELF (ex : .bss)
-- Address (*sh_addr*) : si la section associée doit apparaître dans la mémoire du processus, ce champ contient l'adresse virtuelle à laquelle le premier octet de la section doit être placée, ou 0
+	- *SHT_NULL* : le section header est considéré comme inactif et n'est donc associé à aucune section
+	- *SHT_PROGBITS* : section qui contient des informations sur le programme comme .text ou .data
+	- *SHT_NOTE* : section qui contient des informations spécifiques définies par le vendeur ou le système
+	- *SHT_STRTAB* : section qui contient une string table
+	- *SHT_RELA* : relocation section
+	- *SHT_DYNAMIC* : section qui contient des informations pour du dynamic linking
+	- *SHT_SYMTAB* : section qui contient une table des symboles (.symtab, utilisée lors de l'édition des liens)
+	- *SHT_DYNSYM* : section qui contient une table des symboles (.dynsym, utilisée lors d'un dynamic linking)
+	- *SHT_NOBITS* : section qui n'occupe aucune place dans le fichier ELF (ex : .bss)
+- Address (*sh_addr*) : si la section associée doit apparaître dans la mémoire du processus, ce champ contient l'adresse virtuelle à laquelle le premier octet de la section doit être placée, ou 0 (ex : un fichier objet .o a toutes ses sections avec *sh_addr* à 0)
 - Off (*sh_offset*) : indique l'offset depuis le début du fichier ELF pour atteindre le premier octet de la section 
-- Size (*sh_size*) : taille de la section
+- Size (*sh_size*) : taille de la section. A noter : la valeur de ce champ peut être ignorée pour une section de type *SHT_NOBITS* car elle n'occupe aucune place dans le fichier ELF
 - EntSize (ES, *sh_entsize*) : pour les sections qui contiennent une table, donne la taille d'une entrée de cette table, ou 0
 - Flg (*sh_flags*) : flags associés à la section. Il y a : 
 	- W (*SHF_WRITE*) : la section contient des données dans lesquelles le processus peut écrire pendant son exécution
 	- A (*SHF_ALLOC*) : la section occupe de la mémoire lors de l'exécution du processus
 	- X (*SHF_EXECINSTR*) : la section contient des instructions exécutables
 	- p (*SHF_MASKPROC*) : la signification dépend du processeur
-- Lk (*sh_link*) : l'interprétation de ce champ dépend du type de la section. Il contient l'indice d'un section header
+- Lk (*sh_link*) : l'interprétation de ce champ dépend du type de la section. Il contient l'indice d'un section header. Dans le cas d'une table des symboles (*SHT_SYMTAB* ou *SHT_DYNSYM*), ce champ contient l'indice du section header de la string table associée
 - Inf (*sh_info*) : l'interprétation de ce champ dépend du type de la section
 - Al (*sh_addralign*) : contient soit une puissance de deux pour indiquer une contrainte d'alignement pour *sh*addr* (=> *sh_addr* % *sh_addralign* = 0), ou 0 ou 1
 
+Les principales sections à connaître sont : .bss, .data, .rodata, .symtab et .text.
+
+
 #### Table des symboles
 C'est une ou plusieurs sections (.symtab et .dynsym). On peut les afficher avec la commande : ```readelf -s prog```
+Il existe également les commandes : ```nm -a prog``` et ```nm -D prog``` pour respectivement afficher .symtab et .dynsym
 Une table des symboles est composée des champs suivants : 
 - Num : indice de l'entrée
 - Value (*st_value*) : dans le cas d'un fichier exécutable et d'une librairie partagée (voir *e_type*), ce champ contient l'adresse virtuelle où est situé le symbole 
@@ -96,18 +142,11 @@ Une table des symboles est composée des champs suivants :
 	En effet, soient deux fichiers hello1.c et hello2.c qui contiennent tous les deux une définition pour une même fonction add. Si on compile deux fichiers hello1.c et hello2.c (commande : ```gcc -c helloX.c``` => génère un .o) avec la commande ```gcc hello1.o hello2.o -o hello```, on aura une erreur "multiple definition of `add'". Pour éviter cela, on peut déclarer l'une des fonctions add avec l'attribut gcc "weak". Avec cela, le symbole add aura le bind *STB_WEAK* pour ce fichier objet et l'exécutable final (hello ici) contiendra la définition non-weak.
 - Vis (*st_other*) : visibilité du symbole (DEFAULT, HIDDEN, PROTECTED ou INTERNAL)
 - Ndx (*st_shndx*) : indice dans la section header table du section header associé à ce symbole. Il existe des valeurs spéciales comme *SHN_UNDEF* (symbole non défini, la définition est autre-part, ex : printf est dans une librairie partagée) et *SHF_ABS* (indice dont la valeur ne sera pas modifiée par une relocation)
-- Name (*st_name*) : nom du symbole. En réalité, c'est un indice dans la section header string table (.strtab)
+- Name (*st_name*) : nom du symbole. En réalité, c'est un indice dans la section header string table (.strtab). A noter : le section header associé à une table des symboles contient dans son champ *sh_link* l'indice du section header de .strtab
 
 #### String table
 C'est une ou plusieurs sections (.strtab et .shstrtab). 
 Chaque section contient des strings séparées par des "\0". Les champs qui contiennent un index dans une string table (*e_shstrndx*, *sh_name* et *st_name*) pointent sur le premier caractère de la string voulue.
 La section .strtab contient le nom de chaque symbole.
 La section .shstrtab contient le nom de chaque section.
-
-
-
-
-
-
-
 
