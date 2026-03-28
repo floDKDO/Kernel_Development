@@ -154,7 +154,7 @@ Voyons ce que signifie chaque colonne du premier tableau (*Instruction Summary T
 	- */[0-7]* : indique que l'instruction ne possède qu'une seule opérande, celle-ci étant précisée par le sous-champ *r/m* de *ModR/M*. Cela signifie donc que le sous-champ *reg/opcode* contient des bits supplémentaires pour l'opcode : la valeur indiquée après le slash vaut la valeur en décimal de *reg/opcode*
 	- */r* : indique que l'instruction possède deux opérandes
 - *Instruction* : indique la syntaxe de l'instruction
-	- *rel8* : offset (valeur signée) relativement à l'adresse de fin de l'instruction (octet directement après la fin de l'instruction = EIP), se trouve dans l'intervalle [EIP - 128, EIP + 127] 
+	- *rel8* : offset (valeur signée) relativement à l'adresse de fin de l'instruction (octet directement après la fin de l'instruction = premier octet de la prochaine instruction = EIP), se trouve dans l'intervalle [EIP - 128, EIP + 127] 
 	- *rel16*, *rel32* : offset (valeur signée) dans le même code segment que l'instruction (*rel16* s'applique aux instructions avec une taille d'opérandes à 16 bits et *rel32* pour une taille de 32 bits) 
 	- *imm8*, *imm16*, *imm32*, *imm64* : cette opérande est de type immédiate (le numéro dépend de la taille des opérandes de l'instruction)
 	- *ptr16:16*, *ptr16:32* : cette opérande est un pointeur qui pointe habituellement sur un code segment différent de l'instruction. La valeur de ce pointeur est divisée est deux parties. 

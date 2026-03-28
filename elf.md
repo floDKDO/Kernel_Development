@@ -1,6 +1,10 @@
 # ELF
 
 L'Executable and Linking Format (ELF) est le format des fichiers objets sur les systèmes Unix.
+Il y a 3 types de fichiers objets : 
+- relocatable file (link des relocatable files pour créer un exécutable ou une librairie partagée)
+- executable file 
+- shared object file (le dynamic linker lie la librairie partagée à l'exécutable au runtime)
 
 ## Commandes
 - ```man elf``` : explique le contenu d'un fichier ELF
@@ -35,21 +39,22 @@ Il est composé des champs suivants :
 Il existe également les commandes : ```nm -a prog``` et ```nm -D prog``` pour respectivement afficher .symtab et .dynsym. 
 - Machine (*e_machine*) : architecture du processeur => ISA (ex : AMD x86-64)
 - Version (*e_version*) : doit valoir 1
-- Entry point address (*e_entry*) : adresse virtuelle du code qui doit être exécuté en premier (main() en C) ou 0
+- Entry point address (*e_entry*) : adresse virtuelle du premier octet de l'instruction qui doit être exécutée en premier (_start() en C) ou 0
 - Start of program headers (*e_phoff*) : indique l'offset depuis le début du fichier ELF pour atteindre la program header table, ou 0
 - Start of section headers (*e_shoff*) : indique l'offset depuis le début du fichier ELF pour atteindre la section header table, ou 0
 - Flags (*e_flags*) : vaut 0 habituellement
 - Size of this header (*e_ehsize*) : taille du ELF Header
-- Size of program headers (*e_phentsize*) : taille d'une entrée dans la program header table
-- Number of program headers (*e_phnum*) : contient le nombre d'entrées dans la program header table
+- Size of program headers (*e_phentsize*) : taille d'une entrée dans la program header table, ou 0
+- Number of program headers (*e_phnum*) : contient le nombre d'entrées dans la program header table, ou 0
 - Size of section headers (*e_shentsize*) : taille d'une entrée dans la section header table
 - Number of section headers (*e_shnum*) : contient le nombre d'entrées dans la section header table
 - Section header string table index (*e_shstrndx*) : contient l'indice dans la section header table de l'entrée qui pointe sur la section contenant les noms des sections (.shstrtab)
 
 ### Program header table
 Elle est optionnelle. On peut l'afficher avec la commande : ```readelf -l -W prog```.
+Uniquement les fichiers exécutables et les librairies partagées peuvent disposer d'une program header table.
 Chaque entrée de la program header table décrit un segment via un program header.
-Les segments sont utilisés par l'OS pour charger un programme en mémoire (type = *PT_LOAD*).
+Les segments sont utilisés par l'OS pour charger un programme en mémoire (type = *PT_LOAD*) => ce sont les segments qui sont placés/chargés en mémoire.
 Un segment contient une ou plusieurs sections. La commande ci-dessus affiche également les sections contenues par chaque segment.
 
 Une section appartient à un segment si son intervalle [*sh_addr*, *sh_addr* + *sh_size*] appartient à l'intervalle [*p_vaddr*, *p_vaddr* + *p_memsz*] du segment en question.  
@@ -81,7 +86,7 @@ Elle est composée des champs suivants :
 - VirtAddr (*p_vaddr*) : indique l'adresse virtuelle à laquelle le premier octet du segment doit être placé en mémoire
 - PhysAddr (*p_paddr*) : ignoré pour les systèmes qui respectent l'ABI System V
 - FileSiz (*p_filesz*) : taille du segment dans le fichier ELF, ou 0
-- MemSiz (*p_memsz*) : taille du segment en mémoire, ou 0
+- MemSiz (*p_memsz*) : taille du segment en mémoire, ou 0. A noter, *p_memsz* n'a pas forcément la même valeur que *p_filesz* (ex : la taille du .bss est ajoutée en mémoire)
 - Flg (*p_flags*) : flags associés au segment. Il y a : 
 	- E (*PF_X*) : on peut exécuter le segment
 	- W (*PF_W*) : on peut écrire dans le segment
@@ -102,11 +107,12 @@ Elle est composée des champs suivants :
 	- *SHT_PROGBITS* : section qui contient des informations sur le programme comme .text ou .data
 	- *SHT_NOTE* : section qui contient des informations spécifiques définies par le vendeur ou le système
 	- *SHT_STRTAB* : section qui contient une string table
-	- *SHT_RELA* : relocation section
+	- *SHT_RELA* : relocation section qui contient un champ *r_addend*
+	- *SHT_REL* : relocation section qui ne contient pas de champ *r_addend*
 	- *SHT_DYNAMIC* : section qui contient des informations pour du dynamic linking
 	- *SHT_SYMTAB* : section qui contient une table des symboles (.symtab, utilisée lors de l'édition des liens)
 	- *SHT_DYNSYM* : section qui contient une table des symboles (.dynsym, utilisée lors d'un dynamic linking)
-	- *SHT_NOBITS* : section qui n'occupe aucune place dans le fichier ELF (ex : .bss)
+	- *SHT_NOBITS* : section qui n'occupe aucune place dans le fichier ELF (ex : .bss) stocké sur le disque
 - Address (*sh_addr*) : si la section associée doit apparaître dans la mémoire du processus, ce champ contient l'adresse virtuelle à laquelle le premier octet de la section doit être placée, ou 0 (ex : un fichier objet .o a toutes ses sections avec *sh_addr* à 0)
 - Off (*sh_offset*) : indique l'offset depuis le début du fichier ELF pour atteindre le premier octet de la section 
 - Size (*sh_size*) : taille de la section. A noter : la valeur de ce champ peut être ignorée pour une section de type *SHT_NOBITS* car elle n'occupe aucune place dans le fichier ELF
@@ -128,7 +134,7 @@ C'est une ou plusieurs sections (.symtab et .dynsym). On peut les afficher avec 
 Il existe également les commandes : ```nm -a prog``` et ```nm -D prog``` pour respectivement afficher .symtab et .dynsym
 Une table des symboles est composée des champs suivants : 
 - Num : indice de l'entrée
-- Value (*st_value*) : dans le cas d'un fichier exécutable et d'une librairie partagée (voir *e_type*), ce champ contient l'adresse virtuelle où est situé le symbole 
+- Value (*st_value*) : dans le cas d'un fichier exécutable et d'une librairie partagée (voir *e_type*), ce champ contient l'adresse virtuelle du symbole dans l'espace d'adressage du processus
 - Size (*st_size*) : taille de l'objet associé au symbole
 - Type (sous-partie de *st_info*) : type du symbole dont voici les principaux : 
 	- *STT_NOTYPE* : type non spécifié
@@ -136,7 +142,7 @@ Une table des symboles est composée des champs suivants :
 	- *STT_FUNC* : symbole associé à une fonction
 	- *STT_FILE* : le nom (*st_name*) du symbole est un fichier 
 - Bind (sous-partie de *st_info*) : portée et comportement du symbole. Il y a : 
-	- *STB_LOCAL* : symbole local à son fichier objet (= inaccessible depuis un autre fichier objet). Exemple : variable locale à une fonction ou variable globale statique, fonction statique
+	- *STB_LOCAL* : symbole local à son fichier objet (= inaccessible depuis un autre fichier objet). Exemple : variable locale ou globale statique, fonction statique
 	- *STB_GLOBAL* : symbole global accessible à tous les fichiers objets compilés et liés ensembles
 	- *STB_WEAK* : symbole global qui peut être redéfini. 
 	En effet, soient deux fichiers hello1.c et hello2.c qui contiennent tous les deux une définition pour une même fonction add. Si on compile deux fichiers hello1.c et hello2.c (commande : ```gcc -c helloX.c``` => génère un .o) avec la commande ```gcc hello1.o hello2.o -o hello```, on aura une erreur "multiple definition of `add'". Pour éviter cela, on peut déclarer l'une des fonctions add avec l'attribut gcc "weak". Avec cela, le symbole add aura le bind *STB_WEAK* pour ce fichier objet et l'exécutable final (hello ici) contiendra la définition non-weak.
@@ -150,3 +156,6 @@ Chaque section contient des strings séparées par des "\0". Les champs qui cont
 La section .strtab contient le nom de chaque symbole.
 La section .shstrtab contient le nom de chaque section.
 
+
+#### Relocation
+On peut les voir avec la commande ```objdump -r prog```.
