@@ -3,13 +3,25 @@
 ## Introduction
 Il y a habituellement trois caches dans un processeur : L1, L2 et L3. Ils sont constitués de SRAM.
 Le cache L1 est le plus rapide mais aussi le plus petit, le cache L2 est au milieu et le cache L3 est le moins rapide mais aussi le plus grand.
-
-TODO : cache L1 instruction et data, plusieurs caches L1 et L2 (un par coeur) mais un seul cache L3
+Le cache L1 est séparé en deux caches : 
+	- cache L1 pour les données
+	- cache L1 pour les instructions
+Dans un processeur multi-coeurs, il y a habituellement un cache L1 (données + instructions) et un cache L2 par coeur, et un unique cache L3 partagé entre tous les coeurs du processeur.
 
 
 ## Commandes Linux
-La commande ```lscpu``` donne des informations sur le processeur de notre machine, notamment la taille des caches L1, L2 et L3 et leur nombre (ajouter ```| grep cache``` pour uniquement obtenir des informations sur les caches).
-Les commandes suivantes donnent la taille de chaque ligne des caches du processeur : 
+La commande ```lscpu``` donne des informations sur le processeur de notre machine, notamment la taille des caches L1, L2 et L3, leur nombre etc. (ajouter l'option ```-C``` pour uniquement obtenir des informations sur les caches).
+J'obtiens la sortie suivante : 
+```
+NAME ONE-SIZE ALL-SIZE WAYS TYPE        LEVEL  SETS PHY-LINE COHERENCY-SIZE
+L1d       48K     384K   12 Data            1    64        1             64
+L1i       32K     256K    8 Instruction     1    64        1             64
+L2         1M       8M   16 Unified         2  1024        1             64
+L3        96M      96M   16 Unified         3 98304        1             64
+```
+=> mon processeur a 3 niveaux de cache (L1, L2, L3). Le cache L1 est séparé en 2 : partie données et partie instructions. Il y a un cache L1 (données + instructions) et un cache L2 par coeur (384/48 = 8, 256/32 = 8, 8/1=8), et un seul cache L3 (*ALL-SIZE* = *ONE-SIZE*). Les 3 niveaux de cache sont des caches associatifs (N-way set associative caches). Habituellement, N est plus petit pour le cache L1 par rapport aux caches L2 et L3. 
+
+Les commandes suivantes donnent la taille de chaque ligne des caches du processeur (pour lister toutes les variables de configuration associées aux caches du processeur, il y a la commande ```getconf -a | grep CACHE```) : 
 - ```getconf LEVEL1_DCACHE_LINESIZE``` et ```getconf LEVEL1_ICACHE_LINESIZE```
 - ```getconf LEVEL2_CACHE_LINESIZE```
 - ```getconf LEVEL3_CACHE_LINESIZE```
@@ -17,20 +29,22 @@ Les commandes suivantes donnent la taille de chaque ligne des caches du processe
 
 
 ## Explications
-Un cache est composé de cache sets qui contiennent une ou plusieurs cache lines.
+Un cache est composé de *cache sets* qui contiennent une ou plusieurs *cache lines*.
 Chaque cache line est composée des éléments suivants : 
-- bit Valid = si ce bit est positionné, la cache line contient des informations (= un cache block) 
-- bit Dirty = si ce bit est positionné, le cache block de la cache line a été modifié depuis qu'il a été lu en mémoire => ces modifications n'ont donc pas encore été sauvegardées en mémoire !
-- tag = identifiant unique du cache block dans la cache line
-- cache block = contenu de la mémoire
+- *bit Valid* = si ce bit est positionné, la cache line contient des informations (= un cache block) 
+- *bit Dirty* = si ce bit est positionné, le cache block de la cache line a été modifié depuis qu'il a été lu en mémoire => ces modifications n'ont donc pas encore été sauvegardées en mémoire !
+- *tag* = identifiant unique du cache block dans la cache line
+- *cache block* = contenu de la mémoire
 
 Il y a 3 sortes de cache misses (= défauts de cache) : 
-- compulsory miss : accès à une donnée pour la première fois => celle-ci n'est donc pas encore stockée dans le cache. Cela arrive toujours quand un cache est vide (= cold cache).
-- conflict miss : si plusieurs blocs mémoires correspondent au même emplacement dans le cache, des accès alternés à ces blocs va créer des misses répétés. 
+- *compulsory miss* : accès à une donnée pour la première fois => celle-ci n'est donc pas encore stockée dans le cache. Cela arrive toujours quand un cache est vide (= cold cache).
+- *conflict miss* (uniquement pour direct-mapped et N-way set associative) : si plusieurs blocs mémoires correspondent au même emplacement dans le cache, des accès alternés à ces blocs va créer des misses répétés. 
 Exemple : soient deux blocs mémoires qui correspondent à l'emplacement X dans le cache. Si un programme accéde, de manière répétée, à ces deux blocs, le cache va, à chaque fois, remplacer l'emplacement X pour stocker le bloc accédé.
-- capacity miss : le cache est plus petit que le working set du programme => tous les blocs du working set ne pourront donc pas être tous stockés dans le cache. Il y aura donc des misses.
-TODO : dire à quelle sorte de cache chaque miss se rapporte
-TODO : write-through, write-back
+- *capacity miss* (uniquement pour fully associative) : le cache est plus petit que le working set du programme => tous les blocs du working set ne pourront donc pas être tous stockés dans le cache. Il y aura donc des misses.
+
+Lorsqu'une information est modifiée dans le cache (= écriture), il y a deux stratégies possibles : 
+- *write-through* : la modification effectuée dans le cache est directement répercutée en mémoire
+- *write-back* : la modification effectuée dans le cache est écrite plus tard en mémoire (nécessite un bit dirty) => solution la plus utilisée actuellement
 
 
 ### Direct-mapped cache
@@ -39,9 +53,9 @@ Equivalent à 1-way set associative cache, c'est un cache où il y a exactement 
 Format des adresses : 
 - soit une adresse en mémoire à laquelle un programme veut accéder
 - cette adresse est découpée en 3 parties : 
-	- tag : doit correspondre au tag de la cache line stockée dans le cache set d'indice *set index*
-	- set index : indice du cache set qui devrait stocker le mot demandé
-	- block offset : offset (= position du mot demandé) dans le cache block
+	- *tag* : doit correspondre au tag de la cache line stockée dans le cache set d'indice *set index*
+	- *set index* : indice du cache set qui devrait stocker le mot demandé
+	- *block offset* : offset (= position du mot demandé) dans le cache block
 
 Fonctionnement :   
 Soit un programme qui veut accéder à une donnée (taille = 1 mot) stockée à une certaine adresse en mémoire.
@@ -62,7 +76,6 @@ Si un programme veut accéder à une donnée en mémoire, le cache va d'abord tr
 Ce type de cache possède un unique cache set qui contient donc toutes les cache lines.
 Les adresses ne possèdent donc plus de champ *set index* car il n'y a qu'un seul cache set (= indice 0).
 
-TODO : continuer (page 656).
 
 
 
