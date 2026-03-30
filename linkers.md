@@ -14,7 +14,10 @@ Les paramètres de fonctions et les variables locales sans le mot clef "extern" 
 Les symboles sont dans les sections
 Les symboles qui valent 0 sont dans aucune section quand le fichier ELF est sur le disque (.bss) TODO : à creuser
 
-Une relocation est une action réalisée par le linker. Elle consiste à modifier l'adresse de symboles pour qu'elle corresponde à la disposition de l'exécutable final, qui est une combinaison de plusieurs fichiers objets (une adresse dans un fichier objet serait inexacte dans l'exécutable final car la position des sections serait modifiée).
+## Relocation
+TODO : page 722
+
+Une relocation est une action réalisée par le linker. Elle consiste à modifier l'adresse de symboles pour qu'elle corresponde à la disposition de l'exécutable final, qui est une combinaison de plusieurs fichiers objets (une adresse dans un fichier objet serait inexacte dans l'exécutable final).
 
 Signification de sh_link et sh_info pour SHT_REL et SHT_RELA : 
 	- sh_link contient l'indice du section header de .symtab
@@ -36,13 +39,66 @@ La commande ```readelf -r prog``` affiche le contenu des sections de relocation
 Chaque section de relocation contient des entrées : 
 	- r_offset : pour un relocatable file, offset depuis le début de la section en question => c'est à partir de cet offset qu'une relocation va avoir lieue
 	- r_info : contient deux sous-champs : 
-		- indice dans la table des symboles (.symtab) qui indique le symbole sur lequel la relocation va être effectuée
-		- type de relocation. 
+		- symbol : indice dans la table des symboles (.symtab) qui indique le symbole sur lequel doit pointer l'offset indiqué par *r_offset* 
+		- type : type de relocation
 		Exemple : 
-			- R_386_32 : remplacer directement l'adresse en question (dans la section indiquée par sh_info et à l'offset dans cette section indiqué par r_offset) par la valeur du symbole (= son adresse virtuelle dans l'espace d'adressage du processus) telle qu'indiquée dans la table des symboles
+			- R_386_32 / R_X86_64_32 : remplacer directement l'adresse en question (dans la section indiquée par sh_info et à l'offset dans cette section indiqué par r_offset) par la valeur du symbole (= son adresse virtuelle dans l'espace d'adressage du processus) telle qu'indiquée dans la table des symboles, plus un éventuel addend
+			- R_386_PC32 / R_X86_64_PC32 : adresse relative au program counter (= EIP)
 	- r_addend : membre présent uniquement pour les sections de relocation de type SHT_RELA, nombre constant (ex : 0x32)
-	
-Ex : 
+
+### Exemple de relocation
+Soit le programme suivant : 
+```
+0000000000000000 <main>:
+   0: 48 83 ec 08 		sub $0x8,%rsp
+   4: be 02 00 00 00 		mov $0x2,%esi
+   9: bf 00 00 00 00 		mov $0x0,%edi 
+                	a: R_X86_64_32 array 
+   e: e8 00 00 00 00 		callq 13 <main+0x13> 
+                	f: R_X86_64_PC32 sum-0x4 
+  13: 48 83 c4 08 		add $0x8,%rsp
+  17: c3 			retq
+```
+
+Cas 1 : R_386_32
+
+Soit l'entrée associée dans .rela.text : 
+- r_offset = 0xa
+- r_info = variable array, R_X86_64_32
+- r_addend = 0
+
+Soit l'adresse finale de la variable array = 0x601018  (adresse finale de array = valeur du champ *st_value* dans l'entrée de .symtab qui est associée au symbole array).
+Comme il n'y a pas d'addend, on a : S + A = S + 0 = S = 0x601018.
+
+Dans l'exécutable final, l'instruction mov est à l'adresse 4004d9 : 
+4004d9: bf 18 10 60 00 mov $0x601018,%edi
+
+On voit bien que l'adresse 0x601018 a été écrite en little-endian (18 10 60).
+
+
+Cas 2 : R_386_PC32
+
+Soit l'entrée associée dans .rela.text : 
+- r_offset = 0xf
+- r_info = fonction sum(), R_X86_64_PC32
+- r_addend = -4
+
+Soit l'adresse finale de la section .text = 0x4004d0 et l'adresse finale de la fonction sum() = 0x4004e8 (adresse finale de .text = valeur du champ *sh_addr* du section header de .text, et adresse finale de sum() = valeur du champ *st_value* dans l'entrée de .symtab qui est associée au symbole sum()).
+
+On calcule "P" : P = 0x4004d0 + r_offset = 0x4004d0 + 0xf = 0x4004df
+
+On a : S + A - P = 0x4004e8 + (-4) - 0x4004df = 0x5
+
+Dans l'exécutable final, l'instruction callq est à l'adresse 4004de : 
+    4004de: e8 05 00 00 00 callq 4004e8 <sum> 
+
+On voit bien qu'à la suite de l'opcode de callq (= e8), il y a l'adresse 0x5 = S + A - P.
+Au moment où cette instruction sera exécutée, EIP pointera sur l'instruction suivante à l'adresse 0x4004e3.
+En réalisant l'opération : 0x4004e3 + 0x5 = 0x4004e8, on obtient bien "S", c'est-à-dire l'adresse de la fonction sum() mais relative au registre EIP. 
+
+
+
+(OLD) Ex : 
 Relocation section '.rela.text' at offset 0x250 contains 3 entries:
   Offset          Info           Type           Sym. Value    Sym. Name + Addend
 00000000000b  000300000002 R_X86_64_PC32     0000000000000000 .rodata - 4
@@ -77,10 +133,12 @@ Prenons par exemple la deuxième ligne (appel à printf qui appelle puts) :
 - r_offset = 13 => désigne les zéros (= adresse) pour l'instruction call qui débute à "12:"
 - r_info = 5 (indice de puts dans .symtab) et 4 (type = R_X86_64_PLT32)
 
-Les instructions d'un fichier .o (type = relocatable file) qui utilisent des adresses (ex : call) utilisent l'adresse 0.
+Les instructions d'un fichier .o (type = relocatable file) qui utilisent des adresses (ex : call) utilisent l'adresse 0 => adresse temporaire.
 Exemple :  e8 00 00 00 00  call   4d <main+0x1b> => e8 est l'opcode de call, l'opérande est l'adresse 0 sur 32 bits
 Les sections de relocations (ex : .rela.text) sont visibles uniquement dans les fichiers .o
 
+
+## TODOs
 La fonction _start() appelle __libc_start_main() qui appelle main(). C'est pour ça que si on compile un fichier qui ne contient pas de fonction main(), on obtient une erreur qui dit que dans _start(), il y a une référence indéfinie vers main().
 Exemple : 
 /usr/bin/ld: /usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/Scrt1.o: in function `_start':
