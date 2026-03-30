@@ -53,9 +53,9 @@ Equivalent à 1-way set associative cache, c'est un cache où il y a exactement 
 Format des adresses : 
 - soit une adresse en mémoire à laquelle un programme veut accéder
 - cette adresse est découpée en 3 parties : 
-	- *tag* : doit correspondre au tag de la cache line stockée dans le cache set d'indice *set index*
-	- *set index* : indice du cache set qui devrait stocker le mot demandé
-	- *block offset* : offset (= position du mot demandé) dans le cache block
+	- *tag* : doit correspondre au tag de la cache line stockée dans le cache set d'indice *set index* (longueur adresse - (p + m) bits)
+	- *set index* : indice du cache set qui devrait stocker le mot demandé (p bits)
+	- *block offset* : offset (= position du mot demandé) dans le cache block (m bits)
 
 Fonctionnement :   
 Soit un programme qui veut accéder à une donnée (taille = 1 mot) stockée à une certaine adresse en mémoire.

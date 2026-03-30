@@ -2,9 +2,9 @@
 
 L'Executable and Linking Format (ELF) est le format des fichiers objets sur les systèmes Unix.
 Il y a 3 types de fichiers objets : 
-- relocatable file (link des relocatable files pour créer un exécutable ou une librairie partagée)
+- relocatable file (les relocatable files sont liés entre eux pour créer un exécutable ou une librairie partagée)
 - executable file 
-- shared object file (le dynamic linker lie la librairie partagée à l'exécutable au runtime)
+- shared object file (le linker ```ld``` lie la librairie partagée à d'autres relocatable files, ou le dynamic linker lie la librairie partagée à l'exécutable au runtime)
 
 ## Commandes
 - ```man elf``` : explique le contenu d'un fichier ELF
@@ -15,13 +15,19 @@ Il y a 3 types de fichiers objets :
 - voir les options activées par défaut : ```gcc -v``` dans la partie "Configured with". Par défaut, mon gcc a notamment ```--enable-default-pie``` => e_type = ET_DYN (Position-Independent Executable file). Si l'on souhaite obtenir un exécutable classique, il faut désactiver PIE avec l'option ```-no-pie```. Finalement, on obtient e_type = ET_EXEC (exécutable)
 - ajouter des attributs dans notre code (ex avec weak) : ```__attribute__((weak))```
 - pour obtenir un fichier compilé mais pas link (file.o), on utilise la commande : ```gcc -c file.c```
+- pour obtenir des informations de déboguage (sections .debug*), on utilise l'option ```-g``` avec gcc
+- gcc dispose des éléments suivants : 
+	- préprocesseur : ```cpp```. L'option associée dans gcc est ```-E``` et l'extension de fichier associée est *.i*
+	- compilateur : ```cc1``` ou ```cc1plus``` (est interne à gcc : sur ma machine, il est dans */usr/libexec/gcc/x86_64-linux-gnu/13/*). L'option associée dans gcc est ```-S``` et l'extension de fichier associée est *.s*
+	- assembleur : ```as```. L'option asssociée dans gcc est ```-c``` et l'extension de fichier associée est *.o* ou *.so*
+	- linker (statique) : ```ld```. On arrive jusqu'à cette étape si on utilise gcc sans l'une des options ci-dessus. Le fichier généré par ```ld``` est un fichier exécutable ELF.
 
 
 ## Contenu
 Un fichier ELF est composé des éléments suivants : 
 - ELF header
 - Program header table (optionnelle)
-- des sections
+- sections
 - Section header table (optionnelle)
 
 ### ELF Header
@@ -49,6 +55,7 @@ Il existe également les commandes : ```nm -a prog``` et ```nm -D prog``` pour r
 - Size of section headers (*e_shentsize*) : taille d'une entrée dans la section header table
 - Number of section headers (*e_shnum*) : contient le nombre d'entrées dans la section header table
 - Section header string table index (*e_shstrndx*) : contient l'indice dans la section header table de l'entrée qui pointe sur la section contenant les noms des sections (.shstrtab)
+
 
 ### Program header table
 Elle est optionnelle. On peut l'afficher avec la commande : ```readelf -l -W prog```.
@@ -126,12 +133,21 @@ Elle est composée des champs suivants :
 - Inf (*sh_info*) : l'interprétation de ce champ dépend du type de la section
 - Al (*sh_addralign*) : contient soit une puissance de deux pour indiquer une contrainte d'alignement pour *sh*addr* (=> *sh_addr* % *sh_addralign* = 0), ou 0 ou 1
 
-Les principales sections à connaître sont : .bss, .data, .rodata, .symtab et .text.
+Les principales sections à connaître sont : 
+- .bss : BSS signifie Block Started by Symbol, contient dans le cas classique (option ```-fno-common``` de gcc) les variables globales (normales ou statiques) non initialisées et les variables statiques locales non initialisées (seront initalisées à 0 au run time) et celles initialisées à 0.
+- .data : contient les variables globales et statiques locales initialisées
+- .rodata : contient des variables en lecture seule (ex : chaînes de caractères)
+- .strtab et .shstrtab : tableaux de chaînes de caractères séparées par des \0
+- .symtab : table des symboles (à ne pas confondre avec la table des symboles du compilateur)
+- .text : code compilé du programme
 
 
 #### Table des symboles
 C'est une ou plusieurs sections (.symtab et .dynsym). On peut les afficher avec la commande : ```readelf -s prog```
 Il existe également les commandes : ```nm -a prog``` et ```nm -D prog``` pour respectivement afficher .symtab et .dynsym
+La commande ```strip prog``` supprime la section .symtab de l'exécutable.
+La table des symboles ne contient pas les variables locales non-statiques.
+
 Une table des symboles est composée des champs suivants : 
 - Num : indice de l'entrée
 - Value (*st_value*) : dans le cas d'un fichier exécutable et d'une librairie partagée (voir *e_type*), ce champ contient l'adresse virtuelle du symbole dans l'espace d'adressage du processus
@@ -147,7 +163,12 @@ Une table des symboles est composée des champs suivants :
 	- *STB_WEAK* : symbole global qui peut être redéfini. 
 	En effet, soient deux fichiers hello1.c et hello2.c qui contiennent tous les deux une définition pour une même fonction add. Si on compile deux fichiers hello1.c et hello2.c (commande : ```gcc -c helloX.c``` => génère un .o) avec la commande ```gcc hello1.o hello2.o -o hello```, on aura une erreur "multiple definition of `add'". Pour éviter cela, on peut déclarer l'une des fonctions add avec l'attribut gcc "weak". Avec cela, le symbole add aura le bind *STB_WEAK* pour ce fichier objet et l'exécutable final (hello ici) contiendra la définition non-weak.
 - Vis (*st_other*) : visibilité du symbole (DEFAULT, HIDDEN, PROTECTED ou INTERNAL)
-- Ndx (*st_shndx*) : indice dans la section header table du section header associé à ce symbole. Il existe des valeurs spéciales comme *SHN_UNDEF* (symbole non défini, la définition est autre-part, ex : printf est dans une librairie partagée) et *SHF_ABS* (indice dont la valeur ne sera pas modifiée par une relocation)
+- Ndx (*st_shndx*) : indice dans la section header table du section header associé à ce symbole. Il existe des valeurs spéciales comme : 
+	- *SHN_UNDEF* : symbole non défini, la définition est autre-part, ex : printf est dans une librairie partagée 
+	- *SHF_ABS* : indice dont la valeur ne sera pas modifiée par une relocation 
+	- *SHF_COMMON* : symboles dont l'objet associé est non initialisé et non alloué en mémoire. Cette valeur existe uniquement si l'option ```-fcommon``` de gcc est précisée. Dans ce cas-là, *SHF_COMMON* est à ne pas confondre avec la section .bss :
+		- *SHF_COMMON* est réservé aux variables globales non statiques non initialisées 
+		- la section .bss est réservée aux variables statiques non initialisées et les variables globales et statiques locales initalisées à 0.
 - Name (*st_name*) : nom du symbole. En réalité, c'est un indice dans la section header string table (.strtab). A noter : le section header associé à une table des symboles contient dans son champ *sh_link* l'indice du section header de .strtab
 
 #### String table

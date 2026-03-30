@@ -5,6 +5,11 @@ L'assembleur (ex : ```as```) prend un fichier avec du code assembleur et le conv
 Le linker combine plusieurs fichiers objets pour créer un fichier exécutable.
 On différencie le *program linker* (fichiers objets -> fichier exécutable) du *dynamic linker* (lier les librairies partagées à l'exécutable quand ce dernier est exécuté = au runtime).
 
+Compile time : moment où le code source est compilé par le compilateur
+Link time : moment où les fichiers objets / librairies statiques sont liés pour former un exécutable / librairie partagée par le linker
+Load time : moment où le programme est placé en mémoire par le loader
+Run time : moment où le programme est exécuté 
+
 Les paramètres de fonctions et les variables locales sans le mot clef "extern" ne sont pas des symboles.
 Les symboles sont dans les sections
 Les symboles qui valent 0 sont dans aucune section quand le fichier ELF est sur le disque (.bss) TODO : à creuser
@@ -72,14 +77,9 @@ Prenons par exemple la deuxième ligne (appel à printf qui appelle puts) :
 - r_offset = 13 => désigne les zéros (= adresse) pour l'instruction call qui débute à "12:"
 - r_info = 5 (indice de puts dans .symtab) et 4 (type = R_X86_64_PLT32)
 
-
-
-
 Les instructions d'un fichier .o (type = relocatable file) qui utilisent des adresses (ex : call) utilisent l'adresse 0.
 Exemple :  e8 00 00 00 00  call   4d <main+0x1b> => e8 est l'opcode de call, l'opérande est l'adresse 0 sur 32 bits
 Les sections de relocations (ex : .rela.text) sont visibles uniquement dans les fichiers .o
-
-TODO : importance de l'ordre de l'option -l dans gcc (il faut mettre cette option à la fin de la commande = après l'exécutable, car dans ce sens uniquement, le linker connaîtra les symboles undef du fichier objet et pourra les résoudre avec la librairie. Dans l'autre sens, il ne connaît pas les symboles undef quand il va lire la librairie). La règle à respecter est de mettre en dernier le fichier qui est utilisé par un fichier précédent
 
 La fonction _start() appelle __libc_start_main() qui appelle main(). C'est pour ça que si on compile un fichier qui ne contient pas de fonction main(), on obtient une erreur qui dit que dans _start(), il y a une référence indéfinie vers main().
 Exemple : 
