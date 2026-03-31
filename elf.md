@@ -140,6 +140,7 @@ Les principales sections à connaître sont :
 - .strtab et .shstrtab : tableaux de chaînes de caractères séparées par des \0
 - .symtab : table des symboles (à ne pas confondre avec la table des symboles du compilateur)
 - .text : code compilé du programme
+- .init : contient une fonction _init()
 
 
 #### Table des symboles
