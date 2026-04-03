@@ -61,7 +61,7 @@ Il existe également les commandes : ```nm -a prog``` et ```nm -D prog``` pour r
 Elle est optionnelle. On peut l'afficher avec la commande : ```readelf -l -W prog```.
 Uniquement les fichiers exécutables et les librairies partagées peuvent disposer d'une program header table.
 Chaque entrée de la program header table décrit un segment via un program header.
-Les segments sont utilisés par l'OS pour charger un programme en mémoire (type = *PT_LOAD*) => ce sont les segments qui sont placés/chargés en mémoire.
+Les segments sont utilisés par l'OS (le loader) pour charger un programme en mémoire (type = *PT_LOAD*) => ce sont les segments qui sont placés/chargés en mémoire.
 Un segment contient une ou plusieurs sections. La commande ci-dessus affiche également les sections contenues par chaque segment.
 
 Une section appartient à un segment si son intervalle [*sh_addr*, *sh_addr* + *sh_size*] appartient à l'intervalle [*p_vaddr*, *p_vaddr* + *p_memsz*] du segment en question.  

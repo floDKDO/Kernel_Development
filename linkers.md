@@ -8,6 +8,7 @@ Le programme est chargé en mémoire par le loader. Ce dernier est appelé quand
 
 Compile time : moment où le code source est compilé par le compilateur
 Link time : moment où les fichiers objets / librairies statiques sont liés pour former un exécutable / librairie partagée par le linker
+Build time : compile time + link time
 Load time : moment où le programme est placé en mémoire par le loader
 Run time : moment où le programme est exécuté 
 
@@ -145,7 +146,7 @@ Les sections de relocations (ex : .rela.text) sont visibles uniquement dans les 
 
 
 ## TODOs
-La fonction _start() (fichier objet crt1.o ou Scrt1.o) appelle __libc_start_main() qui appelle main(). C'est pour ça que si on compile un fichier qui ne contient pas de fonction main(), on obtient une erreur qui dit que dans _start(), il y a une référence indéfinie vers main().
+La fonction _start() (fichier objet crt1.o ou Scrt1.o) appelle __libc_start_main() qui appelle main(). Quand main() retourne, __libc_start_main() récupère ce qui est retourné par main() et appelle exit() avec cette valeur. C'est pour ça que si on compile un fichier qui ne contient pas de fonction main(), on obtient une erreur qui dit que dans _start(), il y a une référence indéfinie vers main().
 Exemple : 
 /usr/bin/ld: /usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/Scrt1.o: in function `_start':
 (.text+0x1b): undefined reference to `main'

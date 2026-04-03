@@ -10,7 +10,6 @@ Exemple : ```gcc -shared -o prog main.o -L ./ -ltest``` => lier la librairie par
 Le linker lie une première partie de la librairie partagée à l'exécutable, la suite sera liée au run-time par le dynamic linker.
 
 Par rapport à une librairie statique, les sections d'une librarie partagée ne sont pas ajoutées dans le fichier de l'exécutable. => taille de l'exécutable plus petit.
-
 Exemple : 
 - création d'un exécutable avec la librarie statique du C (libc.a) : ```gcc -static -o hello_static hello.c```
 	- taille = 785 Ko
@@ -24,7 +23,8 @@ Exemple :
 		```linux-vdso.so.1 (0x00007ffd823ba000)```
 		```libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007fe2a6000000)```
 		```/lib64/ld-linux-x86-64.so.2 (0x00007fe2a63f9000)```
-Les sections data et text de la librairie partagée sont ajoutées à l'espace d'adressage de l'exécutable via mmap() par le dynamic linker (pas de copie : les sections de la librarie partagée sont partagées entre les processus qui l'utilise) => un exécutable qui utilise une librairie partagée est dépendent de celle-ci au run-time. Cela n'est pas le cas s'il utilise une librairie statique car celle-ci fait partie intégrante de l'exécutable.
+Les sections .data et .text de la librairie partagée sont ajoutées à l'espace d'adressage de l'exécutable via mmap() par le dynamic linker (pas de copie : les sections de la librarie partagée sont partagées entre les processus qui l'utilise) => un exécutable qui utilise une librairie partagée est dépendent de celle-ci au run-time. Cela n'est pas le cas s'il utilise une librairie statique car celle-ci fait partie intégrante de l'exécutable.
+Attention, les sections .data et .text de la librairie partagée ne sont pas fusionnées aux sections .data et .text de l'exécutable (cas avec les librairies statiques) ! Elles sont placées dans une partie de l'espace d'adressage réservée aux librairies partagées via mmap() ("Memory-mapped region for shared libraries", adresse = 0x40000000).
 
 La section .interp contient le chemin du dynamic linker (*/lib64/ld-linux-x86-64.so.2.* sur ma machine).
 
@@ -42,11 +42,26 @@ Voici quelques exemples de librairies partagées du langage C (présentes dans l
 - libpthread.so.0 : librairie des threads POSIX (utiliser l'option ```-lpthread``` pour la lier à notre programme) 
 
 ## Position-independent code
-Programme qui s'exécute correctement (= n'a pas besoin d'être modifié) peu importe où il est placé en mémoire. gcc a par défaut ```--enable-default-pie``` (voir les options ```-fpic``` ou ```-fPIC``` pour compiler un programme en tant que position-independent code).
+Programme qui s'exécute correctement (= n'a pas besoin d'être modifié) peu importe où il est placé en mémoire. gcc a par défaut ```--enable-default-pie``` (voir les options ```-fpic``` ou ```-fPIC``` pour compiler un programme en tant que position-independent code). Pour cela, il n'utilise pas directement des adresses pour accéder à des symboles mais utilise une GOT et PLT. 
+Une librarie partagée ne sait pas à l'avance où elle sera placée en mémoire, c'est-à-dire où seront placés ses segments .text et .data. 
+Elle sait cependant que la distance entre ces deux sections sera toujours la même : elle peut donc utiliser un adressage PC-relative pour faire référence aux entrées de la GOT, cela pour des symboles UNDEF (= externes) mais aussi pour des symboles de la librarie partagée elle-même (pas obligé mais c'est souvent le cas).
+
+TODO : qui remplit la GOT ? quand est-elle remplie ?
+TODO : utilisation de la GOT car .text n'est pas modifiable ?
+TODO : uniquement les position-independent codes possèdent une GOT/PLT ?
+TODO : relocation entry pour chaque entrée de la GOT
+TODO : .got vs.got.plt
+TODO : GOT aussi pour fonctions
+
+OLD : 
 - comme une librairie partagée sera utilisée par des processus différents, on ne sait pas à l'avance où celle-ci se trouvera en mémoire : elle doit donc être position independent (objectif = ne pas avoir à effectuer de relocations) => peu importe où les segments de cette librairie sont placés dans l'espace d'adressage d'un processus, leur code doit fonctionner.
 
-Procedure Linkage Table (PLT) : dans le code segment (.init .plt .plt.got .plt.sec .text .fini), taille des entrées = 16 octets, sections en question = .plt .plt.got .plt.sec
-Global Offset Table (GOT) : dans le data segment (.init_array .fini_array .dynamic .got .data .bss), taille des entrées = 8 octets, section en question = .got
+Procedure Linkage Table (PLT) : dans le code segment (.init **.plt .plt.got .plt.sec** .text .fini), taille des entrées = 16 octets, sections en question = .plt .plt.got .plt.sec
+Global Offset Table (GOT) : dans le data segment (.init_array .fini_array .dynamic **.got** .data .bss), taille des entrées = 8 octets, section en question = .got, utilisée pour les variables globales
+La GOT est initialisée au link time par le linker et modifiée au load time par le dynamic linker (il met dans chaque entrée l'adresse finale de chaque symbole référencée par chaque entrée de la GOT selon les sections de relocation associées).
+.got.plt est inclus (est un sous-ensemble) de .got
+
+Relation entre la GOT et la PLT.
 
 TODO : gcc ```-fno-plt```
 
