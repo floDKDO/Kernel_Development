@@ -11,6 +11,13 @@ Il y a 3 types de fichiers objets :
 - ```readelf``` : obtenir des informations sur un fichier ELF 
 - ```nm``` : afficher la table des symboles du fichier ELF
 
+## Les différents moments lors de la compilation d'un programme
+- *Compile time* : moment où le code source est compilé par le compilateur
+- *Link time* : moment où les fichiers objets / librairies statiques sont liés pour former un exécutable / librairie partagée par le linker
+- *Build time* : compile time + link time
+- *Load time* : moment où le programme est placé en mémoire par le loader
+- *Run time* : moment où le programme est exécuté 
+
 ## gcc
 - voir les options activées par défaut : ```gcc -v``` dans la partie "Configured with". Par défaut, mon gcc a notamment ```--enable-default-pie``` => e_type = ET_DYN (Position-Independent Executable file). Si l'on souhaite obtenir un exécutable classique, il faut désactiver PIE avec l'option ```-no-pie```. Finalement, on obtient e_type = ET_EXEC (exécutable)
 - ajouter des attributs dans notre code (ex avec weak) : ```__attribute__((weak))```
@@ -21,7 +28,15 @@ Il y a 3 types de fichiers objets :
 	- compilateur : ```cc1``` ou ```cc1plus``` (est interne à gcc : sur ma machine, il est dans */usr/libexec/gcc/x86_64-linux-gnu/13/*). L'option associée dans gcc est ```-S``` et l'extension de fichier associée est *.s*
 	- assembleur : ```as```. L'option asssociée dans gcc est ```-c``` et l'extension de fichier associée est *.o* ou *.so*
 	- linker (statique) : ```ld```. On arrive jusqu'à cette étape si on utilise gcc sans l'une des options ci-dessus. Le fichier généré par ```ld``` est un fichier exécutable ELF.
-
+	
+## _start()
+La fonction _start() (fichier objet crt1.o ou Scrt1.o) appelle __libc_start_main() qui appelle main(). Quand main() retourne, __libc_start_main() récupère ce qui est retourné par main() et appelle exit() avec cette valeur. C'est pour ça que si on compile un fichier qui ne contient pas de fonction main(), on obtient une erreur qui dit que dans _start(), il y a une référence indéfinie vers main().
+Exemple : 
+```
+/usr/bin/ld: /usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/Scrt1.o: in function `_start':
+(.text+0x1b): undefined reference to `main'
+collect2: error: ld returned 1 exit status
+```
 
 ## Contenu
 Un fichier ELF est composé des éléments suivants : 
