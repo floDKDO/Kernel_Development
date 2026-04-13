@@ -34,3 +34,8 @@ Liste de commandes :
 ## Passer des arguments à gdb 
 Pour cela, il faut lancer gdb de cette façon : ```gdb --args executable_name arg1 arg2 argn```
 
+## Fonctionnement interne des breakpoints
+Lorsqu'on ajoute un breakpoint à une certaine ligne de notre programme avec gdb, ce dernier va modifier l'opcode de l'instruction en le remplaçant par 0xCC (= instruction ```int 3``` avec le numéro 3 qui est l'exception Breakpoint).
+Dès que ```int 3``` est exécuté, SIGTRAP est généré et le noyau stoppe le processus de notre programme. A ce moment-là, gdb remplace 0xCC par l'opcode originel de l'instruction.
+On peut ajouter la ligne ```asm("int 3");``` dans notre programme pour créer des breakpoints directement depuis le code de notre programme.
+
