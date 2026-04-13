@@ -143,8 +143,6 @@ Les sections de relocations (ex : .rela.text) sont visibles uniquement dans les 
 
 ## TODOs
 
-Stabs, DWARF
-
 GLOB_DAT : 
 
 JMP_SLOT :  
